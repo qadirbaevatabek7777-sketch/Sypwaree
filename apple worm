@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple Worm O'yini</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+        h1 {
+            margin: 10px 0;
+            color: #2ecc71;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        .info {
+            display: flex;
+            gap: 20px;
+            font-size: 18px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        canvas {
+            background-color: #87CEEB;
+            border: 6px solid #34495e;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        .controls {
+            margin-top: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 18px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background-color: #e67e22;
+            color: white;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background-color: #d35400;
+        }
+        .d-pad {
+            display: grid;
+            grid-template-columns: repeat(3, 50px);
+            grid-template-rows: repeat(2, 50px);
+            gap: 5px;
+            margin-top: 10px;
+        }
+        .d-pad button {
+            padding: 0;
+            font-size: 20px;
+            background-color: #3498db;
+        }
+        .d-pad button:hover {
+            background-color: #2980b9;
+        }
+        .up { grid-column: 2; grid-row: 1; }
+        .left { grid-column: 1; grid-row: 2; }
+        .down { grid-column: 2; grid-row: 2; }
+        .right { grid-column: 3; grid-row: 2; }
+    </style>
+</head>
+<body>
+
+    <h1>🍎 Apple Worm</h1>
+    <div class="info">
+        <span id="level-display">Bosqich: 1</span>
+        <span id="apple-display">Olmalar: 0/1</span>
+    </div>
+
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+
+    <div class="controls">
+        <div class="btn-group">
+            <button onclick="resetLevel()">🔄 Qayta boshlash (R)</button>
+        </div>
+        <p style="margin: 5px 0; font-size: 14px; color: #bdc3c7;">
+            Boshqarish: Klaviatura strelkalari yoki W, A, S, D
+        </p>
+        <!-- Telefon va sichqoncha uchun tugmalar -->
+        <div class="d-pad">
+            <button class="up" onclick="move(0, -1)">⬆️</button>
+            <button class="left" onclick="move(-1, 0)">⬅️</button>
+            <button class="down" onclick="move(0, 1)">⬇️</button>
+            <button class="right" onclick="move(1, 0)">➡️</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const TILE_SIZE = 40;
+        const COLS = canvas.width / TILE_SIZE;  // 15
+        const ROWS = canvas.height / TILE_SIZE; // 10
+
+        // 0: Bo'sh joy, 1: Tosh/Devor, 2: Olma, 3: Portal (Chiqish), 4: Tikan (Xavfli)
+        const levels = [
+            {
+                worm: [{x: 3, y: 7}, {x: 2, y: 7}, {x: 1, y: 7}],
+                map: [,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+                    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+                ]
+            },
+            {
+                worm: [{x: 2, y: 6}, {x: 1, y: 6}],
+                map: [,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+                    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+                ]
+            },
+            {
+                worm: [{x: 2, y: 3}, {x: 1, y: 3}],
+                map: [,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+                    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+                ]
+            }
+        ];
+
+        let currentLevel = 0;
+        let worm = [];
+        let grid = [];
+        let applesTotal = 0;
+        let applesEaten = 0;
+        let isFalling = false;
+
+        function loadLevel(index) {
+            if (index >= levels.length) {
+                alert("🎉 Tabriklaymiz! Barcha bosqichlarni muvaffaqiyatli yakunladingiz!");
+                currentLevel = 0;
+                index = 0;
+            }
+            const lvl = levels[index];
+            worm = JSON.parse(JSON.stringify(lvl.worm));
+            grid = JSON.parse(JSON.stringify(lvl.map));
+            applesTotal = 0;
+            applesEaten = 0;
+
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (grid[r][c] === 2) applesTotal++;
+                }
+            }
+            updateUI();
+            draw();
+        }
+
+        function resetLevel() {
+            loadLevel(currentLevel);
+        }
+
+        function updateUI() {
+            document.getElementById('level-display').innerText = `Bosqich: ${currentLevel + 1}`;
+            document.getElementById('apple-display').innerText = `Olmalar: ${applesEaten}/${applesTotal}`;
+        }
+
+        function isSolid(x, y) {
+            if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return true;
+            if (grid[y][x] === 1 || grid[y][x] === 2) return true;
+            return worm.some(seg => seg.x === x && seg.y === y);
+        }
+
+        function move(dx, dy) {
+            if (isFalling) return;
+
+            const head = worm[0];
+            const nx = head.x + dx;
+            const ny = head.y + dy;
+
+            if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) return;
+
+            // Tikan bilan to'qnashuv
+            if (grid[ny][nx] === 4) {
+                alert("💥 Tikanga tushdingiz! Qayta urinib ko'ring.");
+                resetLevel();
+                return;
+            }
+
+            // Devor yoki o'z tanasiga urilish
+            if (grid[ny][nx] === 1 || worm.some(seg => seg.x === nx && seg.y === ny)) {
+                return;
+            }
+
+            // Portalga kirish
+            if (grid[ny][nx] === 3) {
+                if (applesEaten < applesTotal) {
+                    alert("🍎 Avval barcha olmalarni yeb tugating!");
+                    return;
+                }
+                currentLevel++;
+                setTimeout(() => loadLevel(currentLevel), 200);
+                return;
+            }
+
+            // Olma yeyish
+            let ateApple = false;
+            if (grid[ny][nx] === 2) {
+                ateApple = true;
+                grid[ny][nx] = 0;
+                applesEaten++;
+                updateUI();
+            }
+
+            worm.unshift({x: nx, y: ny});
+            if (!ateApple) {
+                worm.pop();
+            }
+
+            draw();
+            applyGravity();
+        }
+
+        function applyGravity() {
+            isFalling = true;
+            const fallInterval = setInterval(() => {
+                // Qurtchaning birorta bo'lagi tayanchga ega ekanligini tekshirish
+                let supported = false;
+                for (let seg of worm) {
+                    const belowY = seg.y + 1;
+                    if (belowY >= ROWS) {
+                        supported = true;
+                        break;
+                    }
+                    const tileBelow = grid[belowY][seg.x];
+                    if (tileBelow === 1 || tileBelow === 2) {
+                        supported = true;
+                        break;
+                    }
+                }
+
+                if (!supported) {
+                    // Pastga tushirish
+                    for (let seg of worm) {
+                        seg.y += 1;
+                    }
+                    draw();
+
+                    // Pastga tushganda tikan yoki portalga tegishini tekshirish
+                    for (let seg of worm) {
+                        if (seg.y >= ROWS || grid[seg.y][seg.x] === 4) {
+                            clearInterval(fallInterval);
+                            isFalling = false;
+                            alert("💥 Qurtcha pastga quladi!");
+                            resetLevel();
+                            return;
+                        }
+                        if (grid[seg.y][seg.x] === 3 && applesEaten === applesTotal) {
+                            clearInterval(fallInterval);
